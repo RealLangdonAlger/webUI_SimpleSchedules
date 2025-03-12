@@ -85,9 +85,8 @@ try:
             schedulers.schedulers.append(schedulers.Scheduler(name+" LIN", (name+" LIN").replace('_', ' ').title(), lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name)))
             
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
-        
         MinimalScheduler.installed = True
 
 except Exception as e:
-    print("Extension: Extra Schedulers: Unsupported WebUI", str(e))
+    print("Extension: Minimalist Schedulers: Unsupported WebUI", str(e))
     MinimalScheduler.installed = False
