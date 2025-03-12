@@ -87,6 +87,7 @@ try:
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
         
         MinimalScheduler.installed = True
+
 except Exception as e:
     print("Extension: Extra Schedulers: Unsupported WebUI", str(e))
     MinimalScheduler.installed = False
