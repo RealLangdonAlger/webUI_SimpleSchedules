@@ -50,7 +50,6 @@ def fixed_scheduler(n, sigma_min, sigma_max, device, name):
     print(f"\t Sigmas: {values}")
     tensor = create_fixed_schedule(values, n, sigma_min, sigma_max, device)
     print("\t Adjusted: [" + ", ".join(["{:.3f}".format(x.item()) for x in tensor]) + "]")
-
     return tensor
     
 def fixed_scheduler_linear(n, sigma_min, sigma_max, device, name):
@@ -59,7 +58,6 @@ def fixed_scheduler_linear(n, sigma_min, sigma_max, device, name):
     print(f"\t Sigmas: {values}")
     tensor = create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device)
     print("\t Adjusted: [" + ", ".join(["{:.3f}".format(x.item()) for x in tensor]) + "]")
-
     return tensor
 
 from modules import sd_samplers
@@ -81,8 +79,16 @@ try:
 
         #schedulers.schedulers = []
         for name in SCHEDULES.keys():
-            schedulers.schedulers.append(schedulers.Scheduler(name+" LOG", (name+" LOG").replace('_', ' ').title(), lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler(n, sigma_min, sigma_max, device, name)))
-            schedulers.schedulers.append(schedulers.Scheduler(name+" LIN", (name+" LIN").replace('_', ' ').title(), lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name)))
+            schedulers.schedulers.append(schedulers.Scheduler(
+                name+" LOG",
+                (name+" LOG").replace('_', ' ').title(),
+                lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler(n, sigma_min, sigma_max, device, name)
+            ))
+            schedulers.schedulers.append(schedulers.Scheduler(
+                name+" LIN",
+                (name+" LIN").replace('_', ' ').title(),
+                lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name)
+            ))
             
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
         MinimalScheduler.installed = True
