@@ -2,6 +2,11 @@ import torch
 import numpy as np
 from modules import scripts
 
+# Defined schedules
+SCHEDULES = {
+    "minimalist":       [14.615, 0.029]
+}
+
 def create_fixed_schedule(values, n, sigma_min, sigma_max, device, match_minmax = True):
     values = np.array(values)
     
@@ -20,7 +25,7 @@ def create_fixed_schedule(values, n, sigma_min, sigma_max, device, match_minmax 
         x_old = np.linspace(0, 1, len(values))
         x_new = np.linspace(0, 1, n)
         interpolated = np.exp(np.interp(x_new, x_old, np.log(values)))
-    return torch.tensor(list(interpolated) + [0.0], device=device)
+    return torch.tensor(list(interpolated), device=device)
     
 def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_minmax = True):
     values = np.array(values)
@@ -37,12 +42,7 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_
         sigmas = values
     else:
         sigmas = np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(values)), values)
-    return torch.tensor(list(sigmas) + [0.0], device=device)
-
-# Defined schedules
-SCHEDULES = {
-    "minimalist":       [14.615, 0.029]
-}
+    return torch.tensor(list(sigmas), device=device)
 
 def fixed_scheduler(n, sigma_min, sigma_max, device, name):
     print(f"\t Schedule: {name} Loglinear")
