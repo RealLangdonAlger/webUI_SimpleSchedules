@@ -6,14 +6,14 @@ LOG_DEBUG = True
 INSTALLED = False
 # Defined schedules
 SCHEDULES = {
-    "minimalist":  [14.615, 0.029],
-    "med-3":       [14.615, 3, 0.029],
-    "med-1":       [14.615, 1, 0.029],
-    "med-1/10":     [14.615, 0.1, 0.029],
+    ("minimalist", "Log,Lin"):  [14.615, 0.029],
+    ("med-3", "Log"):           [14.615, 3, 0.029],
+    ("med-1", "Log"):           [14.615, 1, 0.029],
+    ("med-1/10", "Log"):        [14.615, 0.1, 0.029],
 }
 
 MIN_DROPOFF_STEPS = 3
-MAX_DROPOFF_RATIO = 0.1
+MAX_DROPOFF_RATIO = 0.2
 LINEAR_SMOOTHING_STEPS = 3
 
 def debug_print(message):
@@ -127,17 +127,33 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
 
-def fixed_scheduler(n, sigma_min, sigma_max, device, name):
-    debug_print(f"\t Schedule: {name} Loglinear")
-    values = SCHEDULES.get(name, [])
+def fixed_scheduler(n, sigma_min, sigma_max, device, sched_key):
+    debug_print(f"\t Schedule: {sched_key} Loglinear")
+    # sched_key can be a tuple or string
+    if isinstance(sched_key, (list, tuple)):
+        sched_name = sched_key[0]
+    else:
+        sched_name = sched_key
+    # Get the values from SCHEDULES using the key.
+    # If sched_key is a tuple, use it; if it's a string, use it directly.
+    values = SCHEDULES.get(sched_key, None)
+    if values is None:
+        # Fallback: try using the sched_name as key.
+        values = SCHEDULES.get(sched_name, [])
     debug_print(f"\t Sigmas: {values}")
     tensor = create_fixed_schedule(values, n, sigma_min, sigma_max, device)
     debug_print("\t Adjusted: [" + ", ".join(["{:.3f}".format(x.item()) for x in tensor]) + f"] (Total: {len(tensor)})")
     return tensor
     
-def fixed_scheduler_linear(n, sigma_min, sigma_max, device, name):
-    debug_print(f"\t Schedule: {name} Linear")
-    values = SCHEDULES.get(name, [])
+def fixed_scheduler_linear(n, sigma_min, sigma_max, device, sched_key):
+    debug_print(f"\t Schedule: {sched_key} Linear")
+    if isinstance(sched_key, (list, tuple)):
+        sched_name = sched_key[0]
+    else:
+        sched_name = sched_key
+    values = SCHEDULES.get(sched_key, None)
+    if values is None:
+        values = SCHEDULES.get(sched_name, [])
     debug_print(f"\t Sigmas: {values}")
     tensor = create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device)
     debug_print("\t Adjusted: [" + ", ".join(["{:.3f}".format(x.item()) for x in tensor]) + f"] (Total: {len(tensor)})")
@@ -159,18 +175,28 @@ try:
         import modules.sd_schedulers as schedulers
         debug_print("Extension: Minimalist Scheduler: Registering new schedules")
 
-        #schedulers.schedulers = []
-        for name in SCHEDULES.keys():
-            schedulers.schedulers.append(schedulers.Scheduler(
-                name+" LOG",
-                (name+" LOG").replace('_', ' ').title(),
-                lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler(n, sigma_min, sigma_max, device, name)
-            ))
-            schedulers.schedulers.append(schedulers.Scheduler(
-                name+" LIN",
-                (name+" LIN").replace('_', ' ').title(),
-                lambda n, sigma_min, sigma_max, device, name=name: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name)
-            ))
+        # Iterate over SCHEDULES items and register only the requested types.
+        for key in SCHEDULES.keys():
+            if isinstance(key, (list, tuple)):
+                sched_name = key[0]
+                types = key[1].split(",")
+                types = [t.strip().lower() for t in types]
+            else:
+                sched_name = key
+                types = ["log", "lin"]
+            
+            if "log" in types:
+                schedulers.schedulers.append(schedulers.Scheduler(
+                    sched_name + " LOG",
+                    (sched_name + " LOG").replace('_', ' ').title(),
+                    lambda n, sigma_min, sigma_max, device, name=key: fixed_scheduler(n, sigma_min, sigma_max, device, name)
+                ))
+            if "lin" in types:
+                schedulers.schedulers.append(schedulers.Scheduler(
+                    sched_name + " LIN",
+                    (sched_name + " LIN").replace('_', ' ').title(),
+                    lambda n, sigma_min, sigma_max, device, name=key: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name)
+                ))
             
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
         INSTALLED = True
