@@ -7,14 +7,11 @@ INSTALLED = False
 # Defined schedules
 SCHEDULES = {
     ("minimalist", "Log,Lin"):  [14.615, 0.029],
-    ("med-3", "Log"):           [14.615, 3, 0.029],
     ("med-1", "Log"):           [14.615, 1, 0.029],
-    ("med-1/10", "Log"):        [14.615, 0.1, 0.029],
 }
 
 MIN_DROPOFF_STEPS = 3
-MAX_DROPOFF_RATIO = 0.2
-LINEAR_SMOOTHING_STEPS = 3
+MAX_DROPOFF_RATIO = 0.1
 
 def debug_print(message):
     if LOG_DEBUG:
@@ -118,12 +115,6 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_
             sigmas = values
         else:
             sigmas = np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(values)), values)
-
-    # Final region smoothing: replace the last few steps with a loglinear decay from the current value to sigma_min.
-    start_index = max(0, n - LINEAR_SMOOTHING_STEPS - 1)
-    start_val = sigmas[start_index]
-    new_final = np.exp(np.linspace(np.log(start_val), np.log(sigma_min), LINEAR_SMOOTHING_STEPS + 1))[1:]
-    sigmas = np.concatenate([sigmas[:start_index], new_final])
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
 
