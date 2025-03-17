@@ -2,14 +2,19 @@ import torch
 import numpy as np
 from modules import scripts
 
-LOG_DEBUG = False
+LOG_DEBUG = True
 INSTALLED = False
 # Defined schedules
 SCHEDULES = {
     "minimalist":  [14.615, 0.029],
-    "med-5":       [14.615, 5, 0.029],
+    "med-3":       [14.615, 3, 0.029],
     "med-1":       [14.615, 1, 0.029],
+    "med-1/10":     [14.615, 0.1, 0.029],
 }
+
+MIN_DROPOFF_STEPS = 3
+MAX_DROPOFF_RATIO = 0.1
+LINEAR_SMOOTHING_STEPS = 3
 
 def debug_print(message):
     if LOG_DEBUG:
@@ -38,7 +43,7 @@ def create_fixed_schedule(values, n, sigma_min, sigma_max, device, match_minmax=
     if isZSNR:
         debug_print(f"\t Very noisy model detected, forcing schedule to drop quickly to {ogSigmaMax}.")
         
-        dropoff_steps = max(5, int(n * 0.2))  # Hard drop withing the first few steps, proportional
+        dropoff_steps = max(MIN_DROPOFF_STEPS, int(n * MAX_DROPOFF_RATIO))  # Hard drop withing the first few steps, proportional
         remaining_steps = n - dropoff_steps
         
         if remaining_steps < 1:
@@ -89,7 +94,7 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_
     if isZSNR:
         debug_print(f"\t Very noisy model detected, forcing schedule to drop quickly to around {ogSigmaMax}.")
         
-        dropoff_steps = max(5, int(n * 0.2))  # Hard drop withing the first few steps, proportional
+        dropoff_steps = max(MIN_DROPOFF_STEPS, int(n * MAX_DROPOFF_RATIO)) 
         remaining_steps = n - dropoff_steps
         
         if remaining_steps < 1:
@@ -115,10 +120,9 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_
             sigmas = np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(values)), values)
 
     # Final region smoothing: replace the last few steps with a loglinear decay from the current value to sigma_min.
-    final_steps = 3
-    start_index = max(0, n - final_steps - 1)
+    start_index = max(0, n - LINEAR_SMOOTHING_STEPS - 1)
     start_val = sigmas[start_index]
-    new_final = np.exp(np.linspace(np.log(start_val), np.log(sigma_min), final_steps + 1))[1:]
+    new_final = np.exp(np.linspace(np.log(start_val), np.log(sigma_min), LINEAR_SMOOTHING_STEPS + 1))[1:]
     sigmas = np.concatenate([sigmas[:start_index], new_final])
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
