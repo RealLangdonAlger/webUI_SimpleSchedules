@@ -6,40 +6,39 @@ LOG_DEBUG = True
 INSTALLED = False
 # Defined schedules
 SCHEDULES = {
-    ("minimalist", "Log,Lin"):  [14.615, 0.029],
-    ("med-1", "Log"):           [14.615, 1, 0.029],
+    ("minimalist", "Lin,Log"):  [14.615, 0.029],
+    ("med-3", "Log"):  [14.615, 3, 0.029],
 }
 
-MIN_DROPOFF_STEPS = 3
-MAX_DROPOFF_RATIO = 0.1
+MIN_DROPOFF_STEPS = 5
+MAX_DROPOFF_RATIO = 0.2
+MATCH_MINMAX_SIGMAS = True
 
 def debug_print(message):
     if LOG_DEBUG:
         print(message)
 
-def create_fixed_schedule(values, n, sigma_min, sigma_max, device, match_minmax=True):
+def create_fixed_schedule(values, n, sigma_min, sigma_max, device):
     # Ensure that values is a numpy array
     values = np.array(values)
-    isZSNR = False
+    adjustedSigmas = False
     ogSigmaMax = values[0]
     ogSigmaMin = values[-1]
     ogValues = values.copy()
 
     # Adjust sigma_max and sigma_min if needed
-    if match_minmax:
+    if MATCH_MINMAX_SIGMAS:
         if values[0] < sigma_max:
             debug_print(f"\t Adjusting sigma_max: {values[0]} -> {sigma_max}")
             values[0] = sigma_max  # Ensure first value is sigma_max
-            isZSNR = True
+            adjustedSigmas = True
             
         if values[-1] > sigma_min:
             debug_print(f"\t Adjusting sigma_min: {values[-1]} -> {sigma_min}")
             values[-1] = sigma_min  # Ensure last value is sigma_min
 
     # Handle zero-term SNR (zsnr) case (high sigma_max)
-    if isZSNR:
-        debug_print(f"\t Very noisy model detected, forcing schedule to drop quickly to {ogSigmaMax}.")
-        
+    if adjustedSigmas:    
         dropoff_steps = max(MIN_DROPOFF_STEPS, int(n * MAX_DROPOFF_RATIO))  # Hard drop withing the first few steps, proportional
         remaining_steps = n - dropoff_steps
         
@@ -68,29 +67,27 @@ def create_fixed_schedule(values, n, sigma_min, sigma_max, device, match_minmax=
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
     
-def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_minmax=True):
+def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device):
     # Ensure that values is a numpy array
     values = np.array(values)
-    isZSNR = False
+    adjustedSigmas = False
     ogSigmaMax = values[0]
     ogSigmaMin = values[-1]
     ogValues = values.copy()
 
     # Adjust sigma_max and sigma_min if needed
-    if match_minmax:
+    if MATCH_MINMAX_SIGMAS:
         if values[0] < sigma_max:
             debug_print(f"\t Adjusting sigma_max: {values[0]} -> {sigma_max}")
             values[0] = sigma_max  # Ensure first value is sigma_max
-            isZSNR = True
+            adjustedSigmas = True
             
         if values[-1] > sigma_min:
             debug_print(f"\t Adjusting sigma_min: {values[-1]} -> {sigma_min}")
             values[-1] = sigma_min  # Ensure last value is sigma_min
 
     # Handle zero-term SNR (zsnr) case (high sigma_max)
-    if isZSNR:
-        debug_print(f"\t Very noisy model detected, forcing schedule to drop quickly to around {ogSigmaMax}.")
-        
+    if adjustedSigmas:
         dropoff_steps = max(MIN_DROPOFF_STEPS, int(n * MAX_DROPOFF_RATIO)) 
         remaining_steps = n - dropoff_steps
         
@@ -117,7 +114,7 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, match_
             sigmas = np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(values)), values)
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
-
+    
 def fixed_scheduler(n, sigma_min, sigma_max, device, sched_key):
     debug_print(f"\t Schedule: {sched_key} Loglinear")
     # sched_key can be a tuple or string
