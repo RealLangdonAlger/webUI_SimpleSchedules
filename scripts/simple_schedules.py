@@ -2,23 +2,25 @@ import torch
 import numpy as np
 from modules import scripts
 
-LOG_DEBUG = True
+LOG_DEBUG = False
 INSTALLED = False
+
+MIN_DROPOFF_STEPS = 4
+MAX_DROPOFF_RATIO = 0.20
+MATCH_MINMAX_SIGMAS = True
+
+
 # Defined schedules
 SCHEDULES = {
-    ("minimalist", "Lin,Log"):  [14.615, 0.029],
-    ("med-3", "Log"):  [14.615, 3, 0.029],
+    ("minimalist", "Lin,Log", MIN_DROPOFF_STEPS):   [14.615, 0.029],
+    ("med-3", "Log", MIN_DROPOFF_STEPS):            [14.615, 3, 0.029],
 }
-
-MIN_DROPOFF_STEPS = 3
-MAX_DROPOFF_RATIO = 0.2
-MATCH_MINMAX_SIGMAS = True
 
 def debug_print(message):
     if LOG_DEBUG:
         print(message)
 
-def create_fixed_schedule(values, n, sigma_min, sigma_max, device):
+def create_fixed_schedule(values, n, sigma_min, sigma_max, device, dropoff_steps):
     # Ensure that values is a numpy array
     values = np.array(values)
     adjustedSigmas = False
@@ -39,7 +41,7 @@ def create_fixed_schedule(values, n, sigma_min, sigma_max, device):
 
     # Handle zero-term SNR (zsnr) case (high sigma_max)
     if adjustedSigmas:    
-        dropoff_steps = max(MIN_DROPOFF_STEPS, int(n * MAX_DROPOFF_RATIO))  # Hard drop withing the first few steps, proportional
+        dropoff_steps = max(dropoff_steps, int(n * MAX_DROPOFF_RATIO))  # Hard drop withing the first few steps, proportional
         remaining_steps = n - dropoff_steps
         
         if remaining_steps < 1:
@@ -67,7 +69,7 @@ def create_fixed_schedule(values, n, sigma_min, sigma_max, device):
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
     
-def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device):
+def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, dropoff_steps):
     # Ensure that values is a numpy array
     values = np.array(values)
     adjustedSigmas = False
@@ -88,7 +90,7 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device):
 
     # Handle zero-term SNR (zsnr) case (high sigma_max)
     if adjustedSigmas:
-        dropoff_steps = max(MIN_DROPOFF_STEPS, int(n * MAX_DROPOFF_RATIO)) 
+        dropoff_steps = max(dropoff_steps, int(n * MAX_DROPOFF_RATIO)) 
         remaining_steps = n - dropoff_steps
         
         if remaining_steps < 1:
@@ -115,7 +117,7 @@ def create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device):
     
     return torch.tensor(list(sigmas) + [0.0], device=device)
     
-def fixed_scheduler(n, sigma_min, sigma_max, device, sched_key):
+def fixed_scheduler(n, sigma_min, sigma_max, device, sched_key, dropoff_steps):
     debug_print(f"\t Schedule: {sched_key} Loglinear")
     # sched_key can be a tuple or string
     if isinstance(sched_key, (list, tuple)):
@@ -129,11 +131,11 @@ def fixed_scheduler(n, sigma_min, sigma_max, device, sched_key):
         # Fallback: try using the sched_name as key.
         values = SCHEDULES.get(sched_name, [])
     debug_print(f"\t Sigmas: {values}")
-    tensor = create_fixed_schedule(values, n, sigma_min, sigma_max, device)
+    tensor = create_fixed_schedule(values, n, sigma_min, sigma_max, device, dropoff_steps)
     debug_print("\t Adjusted: [" + ", ".join(["{:.3f}".format(x.item()) for x in tensor]) + f"] (Total: {len(tensor)})")
     return tensor
     
-def fixed_scheduler_linear(n, sigma_min, sigma_max, device, sched_key):
+def fixed_scheduler_linear(n, sigma_min, sigma_max, device, sched_key, dropoff_steps):
     debug_print(f"\t Schedule: {sched_key} Linear")
     if isinstance(sched_key, (list, tuple)):
         sched_name = sched_key[0]
@@ -143,7 +145,7 @@ def fixed_scheduler_linear(n, sigma_min, sigma_max, device, sched_key):
     if values is None:
         values = SCHEDULES.get(sched_name, [])
     debug_print(f"\t Sigmas: {values}")
-    tensor = create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device)
+    tensor = create_fixed_schedule_linear(values, n, sigma_min, sigma_max, device, dropoff_steps)
     debug_print("\t Adjusted: [" + ", ".join(["{:.3f}".format(x.item()) for x in tensor]) + f"] (Total: {len(tensor)})")
     return tensor
 
@@ -169,21 +171,23 @@ try:
                 sched_name = key[0]
                 types = key[1].split(",")
                 types = [t.strip().lower() for t in types]
+                dropoff = key[2]
             else:
                 sched_name = key
                 types = ["log", "lin"]
+                dropoff = MIN_DROPOFF_STEPS
             
             if "log" in types:
                 schedulers.schedulers.append(schedulers.Scheduler(
                     sched_name + " LOG",
                     (sched_name + " LOG").replace('_', ' ').title(),
-                    lambda n, sigma_min, sigma_max, device, name=key: fixed_scheduler(n, sigma_min, sigma_max, device, name)
+                    lambda n, sigma_min, sigma_max, device, name=key, dropoff_steps=dropoff: fixed_scheduler(n, sigma_min, sigma_max, device, name, dropoff_steps)
                 ))
             if "lin" in types:
                 schedulers.schedulers.append(schedulers.Scheduler(
                     sched_name + " LIN",
                     (sched_name + " LIN").replace('_', ' ').title(),
-                    lambda n, sigma_min, sigma_max, device, name=key: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name)
+                    lambda n, sigma_min, sigma_max, device, name=key, dropoff_steps=dropoff: fixed_scheduler_linear(n, sigma_min, sigma_max, device, name, dropoff_steps)
                 ))
             
         schedulers.schedulers_map = {**{x.name: x for x in schedulers.schedulers}, **{x.label: x for x in schedulers.schedulers}}
